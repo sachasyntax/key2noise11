@@ -16,7 +16,7 @@ CHANNELS = 1
 audio_queue = queue.Queue(maxsize=5)
 lock = threading.Lock()
 stream = None
-dt = 0.05  # aggiornamento globale
+dt = 0.05  # intervallo di aggiornamento globale
 
 # comb filter globals
 comb_buf = np.zeros(8192, dtype=np.float32)
@@ -55,12 +55,14 @@ audio_params = {}
 # acc/dir active
 acc_active = False
 direct_active = True
+
+# acc/dir buffers
 accumulator = np.zeros(acc_size, dtype=np.float32)
 direct_memory = np.zeros(4096, dtype=np.float32)
 
 # perc engine
 perc_active = True
-perc_mix = 0.4 # ex 0.5      
+perc_mix = 0.42 # ex 0.5      
 perc_gain = 0.95  
 
 # funzioni base
@@ -452,6 +454,16 @@ def random_all():
     # log 
     root.after(0, lambda: log("[RANDOM] buffer reset"))
 
+# toggle acc/dir activation
+def toggle_engine():
+    global direct_active, acc_active
+
+    direct_active = not direct_active
+    acc_active = not acc_active
+
+    mode = "DIRECT" if direct_active else "ACCUMULATOR"
+    root.after(0, lambda: log(f"[ENGINE]: {mode}"))
+
 # update params
 def update_params_thread():
     int_params = {
@@ -539,6 +551,10 @@ def function_keys_thread():
                  rand_geometry()
             elif key == "8":
                  rand_morphology()
+            elif key in ("plus", "kp_add", "equal"):
+                 toggle_engine()
+                 keys_down.pop("+", None)
+                 pressed_keys.discard("+")
  
         time.sleep(0.05) 
 
@@ -854,7 +870,7 @@ def process_direct(raw):
     direct_memory[:n] -= dc_d * leak
     comb_memory[:n] -= dc_c * leak
 
-    # lag > accumulator when active
+    # lag toward accumulator
     if acc_active:
         lagval = 0.8
         lagdir = lag(direct_memory[:n], accumulator[-n:], lagval, dt)
@@ -888,7 +904,7 @@ def process_accumulator(raw):
 
     energy = State.energy()
 
-    acc_factor = 0.5
+    acc_factor = 0.99
 
     if not acc_active or raw is None:
         return None
@@ -897,7 +913,7 @@ def process_accumulator(raw):
     if n <= 0:
         return None
 
-    # params 
+    # params snapshot 
     with lock:
         p = audio_params.copy()
 
@@ -915,8 +931,8 @@ def process_accumulator(raw):
     accumulator[-n:] += raw
     
     # pre-filtering
-    hi_factor = 0.003  # highpass
-    lo_factor = 0.05  # lowpass 
+    hi_factor = 0.001  # highpass
+    lo_factor = 0.03  # lowpass 
     acc_copy = accumulator[-n:].copy()
     f_acc = hipass(acc_copy, hi_factor)
     f_acc = lowpass(f_acc, lo_factor)
@@ -965,7 +981,7 @@ def process_percussive(frames):
         idx = (perc_pool.loop_start + int(perc_pool.ptr)) % L
         s = raw[idx]
 
-        # transient shaping
+        # transient shape
         power = 0.1 + 0.3 * energy
         s = np.sign(s) * (abs(s) ** power) # ex 0.3
         s = np.tanh(s * 4.0)     # ex 3        
@@ -1104,9 +1120,9 @@ def load_perc():
         log(f"[PERC] loaded: {os.path.basename(path)}")
 
 def stop_pool1():
-    pool_source.stop()  # stop pool 1
+    pool_source.stop()  # stop pool
     with audio_queue.mutex:
-        audio_queue.queue.clear() # clear queue
+        audio_queue.queue.clear()  # svuota coda
     with lock:
         accumulator[:] = 0
         direct_memory[:] = 0
@@ -1133,7 +1149,7 @@ btn_audio_stop.pack(side="left", padx=5, pady=5)
 btn_audio_next = tk.Button(frame_audio, text="NEXT 1", command=pool_source.next_file, width=10, bg="white")
 btn_audio_next.pack(side="left", padx=5, pady=5)
 
-# pulsanti pool 2 
+# pulsanti pool 2 (percussive)
 btn_perc_load = tk.Button(frame_audio, text="LOAD 2", command=load_perc, width=10, bg="white")
 btn_perc_load.pack(side="left", padx=5, pady=5)
 
@@ -1169,5 +1185,5 @@ root.after(200, update_log)
 # audio stream
 recreate_stream(blocksize)
 
-# start
+# avvia 
 root.mainloop()
