@@ -16,7 +16,7 @@ CHANNELS = 1
 audio_queue = queue.Queue(maxsize=5)
 lock = threading.Lock()
 stream = None
-dt = 0.05  # intervallo di aggiornamento
+dt = 0.05  # aggiornamento globale
 
 # comb filter globals
 comb_buf = np.zeros(8192, dtype=np.float32)
