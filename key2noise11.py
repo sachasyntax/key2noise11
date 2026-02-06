@@ -854,7 +854,7 @@ def process_direct(raw):
     direct_memory[:n] -= dc_d * leak
     comb_memory[:n] -= dc_c * leak
 
-    # lag toward accumulator
+    # lag > accumulator when active
     if acc_active:
         lagval = 0.8
         lagdir = lag(direct_memory[:n], accumulator[-n:], lagval, dt)
@@ -897,7 +897,7 @@ def process_accumulator(raw):
     if n <= 0:
         return None
 
-    # params snapshot 
+    # params 
     with lock:
         p = audio_params.copy()
 
@@ -905,10 +905,10 @@ def process_accumulator(raw):
     fb_amt    = p["fb_amt"]
     delay     = int(p["delay"])
 
-    # shift accumulator
+    # shift 
     accumulator = np.roll(accumulator, -n) * acc_decay
 
-    # add raw
+    # raw
     raw_factor = 0.99
     raw = raw[:n] * raw_factor
     accumulator *= acc_factor
@@ -970,7 +970,7 @@ def process_percussive(frames):
         s = np.sign(s) * (abs(s) ** power) # ex 0.3
         s = np.tanh(s * 4.0)     # ex 3        
 
-        # 
+        # DC leak
         leak_amount = 0.05
         prev = out[i-1] if i > 0 else 0.0
         s = s + prev * leak_amount
@@ -1104,9 +1104,9 @@ def load_perc():
         log(f"[PERC] loaded: {os.path.basename(path)}")
 
 def stop_pool1():
-    pool_source.stop()  # ferma il pool
+    pool_source.stop()  # stop pool 1
     with audio_queue.mutex:
-        audio_queue.queue.clear()  # svuota la coda audio
+        audio_queue.queue.clear() # clear queue
     with lock:
         accumulator[:] = 0
         direct_memory[:] = 0
@@ -1133,7 +1133,7 @@ btn_audio_stop.pack(side="left", padx=5, pady=5)
 btn_audio_next = tk.Button(frame_audio, text="NEXT 1", command=pool_source.next_file, width=10, bg="white")
 btn_audio_next.pack(side="left", padx=5, pady=5)
 
-# pulsanti pool 2 (percussive)
+# pulsanti pool 2 
 btn_perc_load = tk.Button(frame_audio, text="LOAD 2", command=load_perc, width=10, bg="white")
 btn_perc_load.pack(side="left", padx=5, pady=5)
 
@@ -1148,7 +1148,7 @@ root.bind("<KeyPress>", on_key)
 root.bind("<KeyRelease>", on_key_release)
 root.focus_set()  
 
-# polling per log dei parametri
+# polling 
 def update_log():
     with lock:
         for key in keys_down:
@@ -1169,5 +1169,5 @@ root.after(200, update_log)
 # audio stream
 recreate_stream(blocksize)
 
-# avvia 
+# start
 root.mainloop()
